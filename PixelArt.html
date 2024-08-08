@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pixel Art Generator</title>
+</head>
+<body>
+<style>
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background-color: #f0f0f0;
+  overflow-y: auto; /* Ensure the body can scroll vertically */
+}
+
+.container {
+  text-align: center;
+  padding: 20px;
+  max-width: 100%;
+}
+
+#canvas {
+  border: 1px solid #ddd;
+  margin-top: 20px;
+}
+
+.controls {
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+label {
+  margin-right: 10px;
+}
+
+input[type="range"] {
+  width: 100%;
+  max-width: 300px;
+}
+
+select {
+  margin-right: 10px;
+}
+
+</style>
+    <div class="container">
+        <h1>Pixel Art Generator</h1>
+        <input type="file" id="imageInput" accept="image/*">
+        <div class="controls">
+            <label for="gridSize">Grid Size:</label>
+            <select id="gridSize">
+                <option value="16">16x16</option>
+                <option value="32">32x32</option>
+                <option value="64" selected>64x64</option>
+                <option value="128">128x128</option>
+                <option value="256">256x256</option>
+                <option value="512">512x512</option>
+            </select>
+            <label for="scaleSlider">Scale: <span id="scaleValue">100%</span></label>
+            <input type="range" id="scaleSlider" min="10" max="200" value="100" step="10">
+        </div>
+        <canvas id="canvas" width="640" height="640"></canvas>
+        <button id="saveButton">Save Pixel Art</button>
+    </div>
+    <script>
+document.getElementById('imageInput').addEventListener('change', handleImageUpload);
+document.getElementById('scaleSlider').addEventListener('input', updateScale);
+document.getElementById('gridSize').addEventListener('change', drawPixelArt);
+document.getElementById('saveButton').addEventListener('click', savePixelArt);
+
+let img, imageData, gridSize = 64;
+
+function handleImageUpload(event) {
+    const file = event.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            img = new Image();
+            img.onload = function() {
+                gridSize = parseInt(document.getElementById('gridSize').value);
+                const tempCanvas = document.createElement('canvas');
+                const tempContext = tempCanvas.getContext('2d');
+                
+                // Calculate the aspect ratio
+                const aspectRatio = img.width / img.height;
+                let newWidth, newHeight;
+
+                if (img.width > img.height) {
+                    newWidth = gridSize;
+                    newHeight = gridSize / aspectRatio;
+                } else {
+                    newHeight = gridSize;
+                    newWidth = gridSize * aspectRatio;
+                }
+
+                // Set temporary canvas to the calculated dimensions
+                tempCanvas.width = newWidth;
+                tempCanvas.height = newHeight;
+
+                // Disable image smoothing for hard edges
+                tempContext.imageSmoothingEnabled = false;
+
+                // Draw image onto the temporary canvas at calculated dimensions
+                tempContext.drawImage(img, 0, 0, newWidth, newHeight);
+                imageData = tempContext.getImageData(0, 0, newWidth, newHeight);
+
+                drawPixelArt();
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+function updateScale() {
+    const scale = document.getElementById('scaleSlider').value;
+    document.getElementById('scaleValue').innerText = `${scale}%`;
+    drawPixelArt();
+}
+
+function drawPixelArt() {
+    if (!imageData) return;
+    
+    const scale = document.getElementById('scaleSlider').value / 100;
+    const canvas = document.getElementById('canvas');
+    const context = canvas.getContext('2d');
+    const data = imageData.data;
+    
+    // Calculate the pixel size and canvas size
+    const pixelSize = 10 * scale;
+    const canvasSizeX = imageData.width * pixelSize;
+    const canvasSizeY = imageData.height * pixelSize;
+    
+    // Set canvas dimensions
+    canvas.width = canvasSizeX;
+    canvas.height = canvasSizeY;
+
+    // Disable image smoothing for hard edges
+    context.imageSmoothingEnabled = false;
+
+    // Clear the canvas
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw each pixel as a block with the specified scale
+    for (let y = 0; y < imageData.height; y++) {
+        for (let x = 0; x < imageData.width; x++) {
+            const index = (y * imageData.width + x) * 4;
+            const r = data[index];
+            const g = data[index + 1];
+            const b = data[index + 2];
+            const a = data[index + 3] / 255;
+            
+            context.fillStyle = `rgba(${r}, ${g}, ${b}, ${a})`;
+            context.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
+        }
+    }
+}
+
+function savePixelArt() {
+    const canvas = document.getElementById('canvas');
+    const link = document.createElement('a');
+    link.href = canvas.toDataURL();
+    link.download = 'pixel_art.png';
+    link.click();
+}
+
+</script>
+</body>
+</html>
