@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Image Editing App</title>
+</head>
+<body>
+<style>
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: #f0f0f0;
+}
+
+h1 {
+    margin-bottom: 20px;
+}
+
+#canvas {
+    border: 1px solid #000;
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+
+button {
+    margin-top: 10px;
+}
+
+</style>
+    <h1>Simple Image Editing App</h1>
+    <input type="file" id="upload" accept="image/*">
+    <br>
+    <canvas id="canvas"></canvas>
+    <br>
+    <label for="filters">Choose a filter:</label>
+    <select id="filters">
+        <option value="none">None</option>
+        <option value="grayscale">Grayscale</option>
+        <option value="sepia">Sepia</option>
+        <option value="invert">Invert</option>
+        <option value="blur">Blur</option>
+    </select>
+    <button id="applyFilter">Apply Filter</button>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const upload = document.getElementById('upload');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const filtersSelect = document.getElementById('filters');
+    const applyFilterButton = document.getElementById('applyFilter');
+    let originalImageData;
+
+    upload.addEventListener('change', handleImageUpload);
+    applyFilterButton.addEventListener('click', applyFilter);
+
+    function handleImageUpload(event) {
+        const file = event.target.files[0];
+        const reader = new FileReader();
+
+        reader.onload = (e) => {
+            const img = new Image();
+            img.src = e.target.result;
+
+            img.onload = () => {
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+                originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            };
+        };
+
+        reader.readAsDataURL(file);
+    }
+
+    function applyFilter() {
+        if (!originalImageData) return;
+
+        const filter = filtersSelect.value;
+        ctx.putImageData(originalImageData, 0, 0); // Reset to original image
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+        switch (filter) {
+            case 'grayscale':
+                applyGrayscale(imageData);
+                break;
+            case 'sepia':
+                applySepia(imageData);
+                break;
+            case 'invert':
+                applyInvert(imageData);
+                break;
+            case 'blur':
+                applyBlur(imageData);
+                break;
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+    }
+
+    function applyGrayscale(imageData) {
+        const data = imageData.data;
+        for (let i = 0; i < data.length; i += 4) {
+            const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+            data[i] = avg;
+            data[i + 1] = avg;
+            data[i + 2] = avg;
+        }
+    }
+
+    function applySepia(imageData) {
+        const data = imageData.data;
+        for (let i = 0; i < data.length; i += 4) {
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+            data[i] = r * 0.393 + g * 0.769 + b * 0.189;
+            data[i + 1] = r * 0.349 + g * 0.686 + b * 0.168;
+            data[i + 2] = r * 0.272 + g * 0.534 + b * 0.131;
+        }
+    }
+
+    function applyInvert(imageData) {
+        const data = imageData.data;
+        for (let i = 0; i < data.length; i += 4) {
+            data[i] = 255 - data[i];
+            data[i + 1] = 255 - data[i + 1];
+            data[i + 2] = 255 - data[i + 2];
+        }
+    }
+
+    function applyBlur(imageData) {
+        const width = imageData.width;
+        const height = imageData.height;
+        const data = imageData.data;
+        const tempData = new Uint8ClampedArray(data);
+
+        const kernel = [
+            [1 / 9, 1 / 9, 1 / 9],
+            [1 / 9, 1 / 9, 1 / 9],
+            [1 / 9, 1 / 9, 1 / 9]
+        ];
+
+        const getIndex = (x, y, c) => (y * width + x) * 4 + c;
+
+        for (let y = 1; y < height - 1; y++) {
+            for (let x = 1; x < width - 1; x++) {
+                for (let c = 0; c < 3; c++) {
+                    let newValue = 0;
+                    for (let ky = -1; ky <= 1; ky++) {
+                        for (let kx = -1; kx <= 1; kx++) {
+                            const weight = kernel[ky + 1][kx + 1];
+                            newValue += tempData[getIndex(x + kx, y + ky, c)] * weight;
+                        }
+                    }
+                    data[getIndex(x, y, c)] = newValue;
+                }
+            }
+        }
+    }
+});
+
+</script>
+
+</body>
+</html>

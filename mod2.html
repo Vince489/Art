@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image to Quantized Colors</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 50px;
+        }
+        canvas {
+            border: 1px solid #000;
+            margin-top: 20px;
+        }
+        #quantizationInputContainer {
+            margin: 20px 0;
+        }
+        #quantizationValue {
+            margin-left: 10px;
+            font-weight: bold;
+        }
+        #downloadButton {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Simplify Image to Quantized Colors</h1>
+    <input type="file" id="upload" accept="image/*">
+    <div id="quantizationInputContainer">
+        <label for="quantizationInput">Quantization Level: </label>
+        <input type="number" id="quantizationInput" min="1" max="256" step="1" value="1">
+        <span id="quantizationValue">1</span>
+    </div>
+    <button id="generateButton">Generate</button>
+    <button id="downloadButton">Download Image</button>
+    <canvas id="originalCanvas"></canvas>
+    <canvas id="simplifiedCanvas"></canvas>
+
+    <script>
+        let currentImage = null;
+
+        document.getElementById('upload').addEventListener('change', handleImageUpload);
+        document.getElementById('quantizationInput').addEventListener('input', updateQuantizationValue);
+        document.getElementById('generateButton').addEventListener('click', generateImage);
+        document.getElementById('downloadButton').addEventListener('click', downloadImage);
+
+        function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const img = new Image();
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                img.src = e.target.result;
+                img.onload = () => {
+                    currentImage = img;
+                    processImage(img, 1);  // Initial processing with 1 color
+                }
+            };
+
+            reader.readAsDataURL(file);
+        }
+
+        function updateQuantizationValue() {
+            const quantizationValue = document.getElementById('quantizationInput').value;
+            document.getElementById('quantizationValue').textContent = quantizationValue;
+        }
+
+        function generateImage() {
+            if (currentImage) {
+                const quantizationLevel = document.getElementById('quantizationInput').value;
+                processImage(currentImage, quantizationLevel);
+            }
+        }
+
+        function processImage(img, k) {
+            const originalCanvas = document.getElementById('originalCanvas');
+            const simplifiedCanvas = document.getElementById('simplifiedCanvas');
+            const originalCtx = originalCanvas.getContext('2d', { willReadFrequently: true });
+            const simplifiedCtx = simplifiedCanvas.getContext('2d');
+
+            // Disable image smoothing to retain pixel art quality
+            originalCtx.imageSmoothingEnabled = false;
+            simplifiedCtx.imageSmoothingEnabled = false;
+
+            const width = img.width;
+            const height = img.height;
+
+            originalCanvas.width = width;
+            originalCanvas.height = height;
+            originalCtx.drawImage(img, 0, 0);
+
+            // Get pixel data
+            const imageData = originalCtx.getImageData(0, 0, width, height);
+            const pixels = [];
+            for (let i = 0; i < imageData.data.length; i += 4) {
+                pixels.push([imageData.data[i], imageData.data[i + 1], imageData.data[i + 2]]);
+            }
+
+            // Quantize to the selected number of colors using k-means clustering
+            const quantizedPixels = kMeansQuantize(pixels, k);
+
+            // Create a new ImageData object with quantized colors
+            const quantizedData = new Uint8ClampedArray(imageData.data.length);
+            for (let i = 0; i < quantizedPixels.length; i++) {
+                const [r, g, b] = quantizedPixels[i];
+                quantizedData[i * 4] = r;
+                quantizedData[i * 4 + 1] = g;
+                quantizedData[i * 4 + 2] = b;
+                quantizedData[i * 4 + 3] = 255; // Alpha channel
+            }
+
+            const quantizedImageData = new ImageData(quantizedData, width, height);
+            simplifiedCanvas.width = width;
+            simplifiedCanvas.height = height;
+            simplifiedCtx.putImageData(quantizedImageData, 0, 0);
+        }
+
+        function kMeansQuantize(pixels, k) {
+            // Initialize k random centroids
+            let centroids = [];
+            for (let i = 0; i < k; i++) {
+                centroids.push(pixels[Math.floor(Math.random() * pixels.length)]);
+            }
+
+            let clusters = Array.from({ length: k }, () => []);
+            let oldCentroids = [];
+            let maxIterations = 10;
+            let iteration = 0;
+
+            while (!areCentroidsEqual(centroids, oldCentroids) && iteration < maxIterations) {
+                // Assign pixels to the nearest centroid
+                clusters = Array.from({ length: k }, () => []);
+                for (const pixel of pixels) {
+                    let minDistance = Infinity;
+                    let clusterIndex = 0;
+                    for (let i = 0; i < centroids.length; i++) {
+                        const distance = getDistance(pixel, centroids[i]);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            clusterIndex = i;
+                        }
+                    }
+                    clusters[clusterIndex].push(pixel);
+                }
+
+                // Update centroids
+                oldCentroids = centroids.map(centroid => [...centroid]);
+                centroids = clusters.map(cluster => {
+                    if (cluster.length === 0) return [0, 0, 0];
+                    const sum = cluster.reduce((acc, pixel) => [acc[0] + pixel[0], acc[1] + pixel[1], acc[2] + pixel[2]], [0, 0, 0]);
+                    return [Math.floor(sum[0] / cluster.length), Math.floor(sum[1] / cluster.length), Math.floor(sum[2] / cluster.length)];
+                });
+
+                iteration++;
+            }
+
+            // Assign each pixel to the color of its nearest centroid
+            return pixels.map(pixel => {
+                let minDistance = Infinity;
+                let nearestCentroid = centroids[0];
+                for (const centroid of centroids) {
+                    const distance = getDistance(pixel, centroid);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        nearestCentroid = centroid;
+                    }
+                }
+                return nearestCentroid;
+            });
+        }
+
+        function getDistance(color1, color2) {
+            return Math.sqrt(
+                Math.pow(color1[0] - color2[0], 2) +
+                Math.pow(color1[1] - color2[1], 2) +
+                Math.pow(color1[2] - color2[2], 2)
+            );
+        }
+
+        function areCentroidsEqual(centroids1, centroids2) {
+            if (!centroids1 || !centroids2) return false;
+            if (centroids1.length !== centroids2.length) return false;
+            for (let i = 0; i < centroids1.length; i++) {
+                if (
+                    centroids1[i][0] !== centroids2[i][0] ||
+                    centroids1[i][1] !== centroids2[i][1] ||
+                    centroids1[i][2] !== centroids2[i][2]
+                ) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        function downloadImage() {
+            const simplifiedCanvas = document.getElementById('simplifiedCanvas');
+            const link = document.createElement('a');
+            link.href = simplifiedCanvas.toDataURL();
+            link.download = 'quantized-image.png';
+            link.click();
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Image Cropper</title>
+    <style>
+        #canvas {
+            border: 1px solid black;
+            cursor: crosshair;
+        }
+        #croppedCanvas {
+            border: 1px solid black;
+        }
+    </style>
+</head>
+<body>
+    <input type="file" id="upload">
+    <canvas id="canvas" tabindex="0"></canvas>
+    <br>
+    <button id="cropBtn">Crop</button>
+    <br>
+    <canvas id="croppedCanvas"></canvas>
+
+    <script>
+const upload = document.getElementById('upload');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const croppedCanvas = document.getElementById('croppedCanvas');
+const croppedCtx = croppedCanvas.getContext('2d');
+
+let img = new Image();
+let cropping = false;
+let moving = false;
+let startX, startY, endX, endY, sideLength;
+let offsetX, offsetY;
+
+upload.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        img.src = event.target.result;
+        img.onload = function() {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+        }
+    }
+    reader.readAsDataURL(file);
+});
+
+canvas.addEventListener('mousedown', function(e) {
+    startX = e.offsetX;
+    startY = e.offsetY;
+
+    if (startX >= endX && startX <= endX + sideLength && startY >= endY && startY <= endY + sideLength) {
+        moving = true;
+        offsetX = startX - endX;
+        offsetY = startY - endY;
+    } else {
+        cropping = true;
+        endX = startX;
+        endY = startY;
+    }
+});
+
+canvas.addEventListener('mousemove', function(e) {
+    if (cropping) {
+        let mouseX = e.offsetX;
+        let mouseY = e.offsetY;
+        sideLength = Math.max(Math.abs(mouseX - startX), Math.abs(mouseY - startY));
+        endX = startX + (mouseX > startX ? sideLength : -sideLength);
+        endY = startY + (mouseY > startY ? sideLength : -sideLength);
+        draw();
+    } else if (moving) {
+        let newEndX = e.offsetX - offsetX;
+        let newEndY = e.offsetY - offsetY;
+        startX = newEndX;
+        startY = newEndY;
+        endX = startX;
+        endY = startY;
+        draw();
+    }
+});
+
+canvas.addEventListener('mouseup', function() {
+    cropping = false;
+    moving = false;
+});
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0);
+    ctx.setLineDash([6]);
+    ctx.strokeStyle = 'red';
+    ctx.strokeRect(startX, startY, sideLength, sideLength);
+}
+
+document.getElementById('cropBtn').addEventListener('click', function() {
+    const cropWidth = sideLength;
+    const cropHeight = sideLength;
+    const croppedImage = ctx.getImageData(startX, startY, cropWidth, cropHeight);
+    croppedCanvas.width = cropWidth;
+    croppedCanvas.height = cropHeight;
+    croppedCtx.putImageData(croppedImage, 0, 0);
+});
+
+</script>
+</body>
+</html>
