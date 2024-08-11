@@ -15,6 +15,7 @@
         canvas {
             border: 1px solid #000;
             margin-top: 20px;
+            display: none;
         }
         #quantizationInputContainer {
             margin: 20px 0;
@@ -23,8 +24,29 @@
             margin-left: 10px;
             font-weight: bold;
         }
-        #downloadButton {
+        #thumbnailsContainer {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
             margin-top: 20px;
+        }
+        .thumbnail {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .thumbnail canvas {
+            display: block;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+        }
+        .thumbnail button {
+            padding: 5px 10px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
         }
     </style>
 </head>
@@ -42,9 +64,7 @@
         <span id="quantizationValue">Low (2-10)</span>
     </div>
     <button id="generateButton">Generate</button>
-    <button id="downloadButton">Download Image</button>
-    <canvas id="originalCanvas"></canvas>
-    <canvas id="simplifiedCanvas"></canvas>
+    <div id="thumbnailsContainer"></div>
 
     <script>
         let currentImage = null;
@@ -52,8 +72,7 @@
 
         document.getElementById('upload').addEventListener('change', handleImageUpload);
         document.getElementById('quantizationInput').addEventListener('change', updateQuantizationValue);
-        document.getElementById('generateButton').addEventListener('click', generateImage);
-        document.getElementById('downloadButton').addEventListener('click', downloadImage);
+        document.getElementById('generateButton').addEventListener('click', generateThumbnails);
 
         function handleImageUpload(event) {
             const file = event.target.files[0];
@@ -66,7 +85,6 @@
                 img.src = e.target.result;
                 img.onload = () => {
                     currentImage = img;
-                    processImage(img, 2);  // Initial processing with 2 colors
                 }
             };
 
@@ -84,7 +102,7 @@
             document.getElementById('quantizationValue').textContent = quantizationText[quantizationValue];
         }
 
-        function generateImage() {
+        async function generateThumbnails() {
             if (currentImage) {
                 const quantizationLevel = document.getElementById('quantizationInput').value;
                 const quantizationRanges = {
@@ -94,63 +112,73 @@
                     'high': [37, 48]
                 };
                 const [min, max] = quantizationRanges[quantizationLevel];
-                const k = Math.floor(Math.random() * (max - min + 1)) + min;
-                processImage(currentImage, k);
+
+                const thumbnailsContainer = document.getElementById('thumbnailsContainer');
+                thumbnailsContainer.innerHTML = ''; // Clear previous thumbnails
+
+                for (let k = min; k <= max; k++) {
+                    const thumbnailCanvas = await processImage(currentImage, k);
+                    const thumbnailDiv = document.createElement('div');
+                    thumbnailDiv.className = 'thumbnail';
+                    thumbnailDiv.appendChild(thumbnailCanvas);
+
+                    const downloadButton = document.createElement('button');
+                    downloadButton.textContent = `Download ${k} Colors`;
+                    downloadButton.addEventListener('click', () => {
+                        const link = document.createElement('a');
+                        link.href = thumbnailCanvas.toDataURL();
+                        link.download = `quantized-image-${k}-colors.png`;
+                        link.click();
+                    });
+
+                    thumbnailDiv.appendChild(downloadButton);
+                    thumbnailsContainer.appendChild(thumbnailDiv);
+                }
             }
         }
 
         function processImage(img, k) {
-            const originalCanvas = document.getElementById('originalCanvas');
-            const simplifiedCanvas = document.getElementById('simplifiedCanvas');
-            const originalCtx = originalCanvas.getContext('2d', { willReadFrequently: true });
-            const simplifiedCtx = simplifiedCanvas.getContext('2d');
+            return new Promise((resolve) => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-            // Disable image smoothing to retain pixel art quality
-            originalCtx.imageSmoothingEnabled = false;
-            simplifiedCtx.imageSmoothingEnabled = false;
+                // Disable image smoothing to retain pixel art quality
+                ctx.imageSmoothingEnabled = false;
 
-            const width = img.width;
-            const height = img.height;
+                const width = img.width;
+                const height = img.height;
 
-            originalCanvas.width = width;
-            originalCanvas.height = height;
-            originalCtx.drawImage(img, 0, 0);
+                canvas.width = width;
+                canvas.height = height;
+                ctx.drawImage(img, 0, 0);
 
-            // Get pixel data
-            const imageData = originalCtx.getImageData(0, 0, width, height);
-            const pixels = [];
-            for (let i = 0; i < imageData.data.length; i += 4) {
-                pixels.push([imageData.data[i], imageData.data[i + 1], imageData.data[i + 2]]);
-            }
-
-            // Use Web Worker to quantize the image
-            worker.postMessage({ pixels, k });
-
-            worker.onmessage = function(e) {
-                const quantizedPixels = e.data;
-                // Create a new ImageData object with quantized colors
-                const quantizedData = new Uint8ClampedArray(imageData.data.length);
-                for (let i = 0; i < quantizedPixels.length; i++) {
-                    const [r, g, b] = quantizedPixels[i];
-                    quantizedData[i * 4] = r;
-                    quantizedData[i * 4 + 1] = g;
-                    quantizedData[i * 4 + 2] = b;
-                    quantizedData[i * 4 + 3] = 255; // Alpha channel
+                // Get pixel data
+                const imageData = ctx.getImageData(0, 0, width, height);
+                const pixels = [];
+                for (let i = 0; i < imageData.data.length; i += 4) {
+                    pixels.push([imageData.data[i], imageData.data[i + 1], imageData.data[i + 2]]);
                 }
 
-                const quantizedImageData = new ImageData(quantizedData, width, height);
-                simplifiedCanvas.width = width;
-                simplifiedCanvas.height = height;
-                simplifiedCtx.putImageData(quantizedImageData, 0, 0);
-            };
-        }
+                // Use Web Worker to quantize the image
+                worker.postMessage({ pixels, k });
 
-        function downloadImage() {
-            const simplifiedCanvas = document.getElementById('simplifiedCanvas');
-            const link = document.createElement('a');
-            link.href = simplifiedCanvas.toDataURL();
-            link.download = 'quantized-image.png';
-            link.click();
+                worker.onmessage = function(e) {
+                    const quantizedPixels = e.data;
+                    // Create a new ImageData object with quantized colors
+                    const quantizedData = new Uint8ClampedArray(imageData.data.length);
+                    for (let i = 0; i < quantizedPixels.length; i++) {
+                        const [r, g, b] = quantizedPixels[i];
+                        quantizedData[i * 4] = r;
+                        quantizedData[i * 4 + 1] = g;
+                        quantizedData[i * 4 + 2] = b;
+                        quantizedData[i * 4 + 3] = 255; // Alpha channel
+                    }
+
+                    const quantizedImageData = new ImageData(quantizedData, width, height);
+                    ctx.putImageData(quantizedImageData, 0, 0);
+                    resolve(canvas);
+                };
+            });
         }
     </script>
 </body>
