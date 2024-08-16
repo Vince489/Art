@@ -19,7 +19,20 @@
 <body>
     <h1>Pixel Art Resizer</h1>
     <input type="file" id="imageUpload" accept="image/*">
-    <br>
+    <br><br>
+
+    <!-- Dropdown menu for selecting width -->
+    <label for="widthSelect">Choose a downscale width:</label>
+    <select id="widthSelect">
+        <option value="16">16</option>
+        <option value="32" selected>32</option>
+        <option value="64">64</option>
+        <option value="96">96</option>
+        <option value="128">128</option>
+        <option value="256">256</option>
+    </select>
+    <br><br>
+
     <button id="resizeButton">Generate Pixel Art</button>
     <br>
     <canvas id="outputCanvas"></canvas>

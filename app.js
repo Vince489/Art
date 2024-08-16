@@ -3,6 +3,7 @@ const imageUpload = document.getElementById('imageUpload');
 const resizeButton = document.getElementById('resizeButton');
 const outputCanvas = document.getElementById('outputCanvas');
 const ctx = outputCanvas.getContext('2d');
+const widthSelect = document.getElementById('widthSelect');
 
 let image = new Image();
 
@@ -21,8 +22,8 @@ imageUpload.addEventListener('change', (e) => {
 // Generate pixel art by downscaling and then upscaling
 resizeButton.addEventListener('click', () => {
     if (image.src) {
-        // Set the initial downscaled canvas size to 32px width
-        const scaleDownWidth = 64;
+        // Get the selected width from the dropdown
+        const scaleDownWidth = parseInt(widthSelect.value);
         const scaleDownHeight = Math.floor((image.height / image.width) * scaleDownWidth);
 
         const scaleFactor = 4;  // Factor to upscale by
