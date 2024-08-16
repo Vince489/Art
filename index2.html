@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image to Quantized Colors</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 50px;
+        }
+        canvas {
+            border: 1px solid #000;
+            margin-top: 20px;
+        }
+        #quantizationInputContainer {
+            margin: 20px 0;
+        }
+        #quantizationValue {
+            margin-left: 10px;
+            font-weight: bold;
+        }
+        #downloadButton {
+            margin-top: 20px;
+        }
+        #previewContainer {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            margin-top: 20px;
+        }
+        .preview {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>Simplify Image to Quantized Colors</h1>
+    <input type="file" id="upload" accept="image/*">
+    <input type="file" id="referenceUpload" accept="image/*">
+    <div id="quantizationInputContainer">
+        <label for="quantizationInput">Quantization Level: </label>
+        <input type="number" id="quantizationInput" min="1" max="256" step="1" value="16">
+        <span id="quantizationValue">16</span>
+    </div>
+    <div id="algorithmInputContainer">
+        <label for="algorithmSelect">Quantization Algorithm: </label>
+        <select id="algorithmSelect">
+            <option value="medianCut">Median Cut</option>
+            <option value="octree">Octree</option>
+        </select>
+    </div>
+    <button id="generateButton">Generate</button>
+    <button id="downloadButton">Download Image</button>
+    <div id="previewContainer">
+        <div class="preview">
+            <h3>Original Image</h3>
+            <canvas id="originalCanvas"></canvas>
+        </div>
+        <div class="preview">
+            <h3>Reference Image</h3>
+            <canvas id="referenceCanvas"></canvas>
+        </div>
+        <div class="preview">
+            <h3>Simplified Image</h3>
+            <canvas id="simplifiedCanvas"></canvas>
+        </div>
+    </div>
+
+    <script>
+        let currentImage = null;
+        let referenceImage = null;
+
+        document.getElementById('upload').addEventListener('change', handleImageUpload);
+        document.getElementById('referenceUpload').addEventListener('change', handleReferenceImageUpload);
+        document.getElementById('quantizationInput').addEventListener('input', updateQuantizationValue);
+        document.getElementById('generateButton').addEventListener('click', generateImage);
+        document.getElementById('downloadButton').addEventListener('click', downloadImage);
+
+        const worker = new Worker('worker.js');
+
+        worker.onmessage = function(event) {
+            const { quantizedData } = event.data;
+            const simplifiedCanvas = document.getElementById('simplifiedCanvas');
+            const simplifiedCtx = simplifiedCanvas.getContext('2d');
+
+            simplifiedCanvas.width = quantizedData.width; // Set canvas width
+            simplifiedCanvas.height = quantizedData.height; // Set canvas height
+
+            const quantizedImageData = new ImageData(quantizedData.data, quantizedData.width, quantizedData.height);
+            simplifiedCtx.putImageData(quantizedImageData, 0, 0);
+        };
+
+        function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const img = new Image();
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                img.src = e.target.result;
+                img.onload = () => {
+                    currentImage = img;
+                    drawImageToCanvas(img, 'originalCanvas');
+                }
+            };
+
+            reader.readAsDataURL(file);
+        }
+
+        function handleReferenceImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const img = new Image();
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                img.src = e.target.result;
+                img.onload = () => {
+                    referenceImage = img;
+                    drawImageToCanvas(img, 'referenceCanvas');
+                }
+            };
+
+            reader.readAsDataURL(file);
+        }
+
+        function drawImageToCanvas(image, canvasId) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            canvas.width = image.width;
+            canvas.height = image.height;
+            ctx.drawImage(image, 0, 0);
+        }
+
+        function updateQuantizationValue() {
+            const quantizationValue = document.getElementById('quantizationInput').value;
+            document.getElementById('quantizationValue').textContent = quantizationValue;
+        }
+
+        function generateImage() {
+            if (currentImage && referenceImage) {
+                const quantizationLevel = parseInt(document.getElementById('quantizationInput').value);
+                const algorithm = document.getElementById('algorithmSelect').value;
+
+                const originalCanvas = document.getElementById('originalCanvas');
+                const originalCtx = originalCanvas.getContext('2d', { willReadFrequently: true });
+                originalCtx.imageSmoothingEnabled = false;
+
+                const refCanvas = document.createElement('canvas');
+                const refCtx = refCanvas.getContext('2d');
+                refCanvas.width = referenceImage.width;
+                refCanvas.height = referenceImage.height;
+                refCtx.drawImage(referenceImage, 0, 0);
+
+                const imgData = originalCtx.getImageData(0, 0, originalCanvas.width, originalCanvas.height);
+                const refImgData = refCtx.getImageData(0, 0, refCanvas.width, refCanvas.height);
+
+                worker.postMessage({ imgData, k: quantizationLevel, refImgData, algorithm });
+            } else {
+                alert("Please upload both the main image and the reference image.");
+            }
+        }
+
+        function downloadImage() {
+            const simplifiedCanvas = document.getElementById('simplifiedCanvas');
+            const link = document.createElement('a');
+            link.download = 'quantized-image.png';
+            link.href = simplifiedCanvas.toDataURL();
+            link.click();
+        }
+    </script>
+</body>
+</html>

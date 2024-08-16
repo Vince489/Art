@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>N-gram Generator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        textarea {
+            width: 100%;
+            height: 100px;
+        }
+        button {
+            margin-top: 10px;
+        }
+        .result {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>N-gram Generator</h1>
+    <textarea id="textInput" placeholder="Enter your text here..."></textarea>
+    <button onclick="generateNgrams()">Generate Bigrams and Trigrams</button>
+    <div class="result">
+        <h2>Bigrams:</h2>
+        <div id="bigrams"></div>
+        <h2>Trigrams:</h2>
+        <div id="trigrams"></div>
+    </div>
+    <script>
+function generateNgrams() {
+    const text = document.getElementById('textInput').value;
+    const tokens = text.split(/\s+/).filter(token => token.length > 0);
+    
+    const bigrams = generateNgram(tokens, 2);
+    const trigrams = generateNgram(tokens, 3);
+
+    displayNgrams(bigrams, 'bigrams');
+    displayNgrams(trigrams, 'trigrams');
+}
+
+function generateNgram(tokens, n) {
+    let ngrams = [];
+    for (let i = 0; i <= tokens.length - n; i++) {
+        ngrams.push(tokens.slice(i, i + n).join(' '));
+    }
+    return ngrams;
+}
+
+function generateNgrams() {
+    const text = document.getElementById('textInput').value;
+    const tokens = text.split(/\s+/).filter(token => token.length > 0);
+    
+    const bigramCounts = countNgrams(tokens, 2);
+    const trigramCounts = countNgrams(tokens, 3);
+
+    displayNgrams(bigramCounts, 'bigrams');
+    displayNgrams(trigramCounts, 'trigrams');
+}
+
+function countNgrams(tokens, n) {
+    let ngramCounts = {};
+    for (let i = 0; i <= tokens.length - n; i++) {
+        const ngram = tokens.slice(i, i + n).join(' ');
+        if (ngramCounts[ngram]) {
+            ngramCounts[ngram]++;
+        } else {
+            ngramCounts[ngram] = 1;
+        }
+    }
+    return ngramCounts;
+}
+
+function displayNgrams(ngramCounts, elementId) {
+    const container = document.getElementById(elementId);
+    container.innerHTML = Object.entries(ngramCounts)
+        .map(([ngram, count]) => `<div>${ngram} (${count})</div>`)
+        .join('');
+}
+
+
+</script>
+</body>
+</html>
