@@ -25,16 +25,17 @@ self.onmessage = function(event) {
 
     // Create a map from original colors to quantized colors
     const colorMap = new Map();
-    for (let i = 0; i < quantizedColors.length; i++) {
-        colorMap.set(JSON.stringify(quantizedColors[i]), i);
+    for (let i = 0; i < colors.length; i++) {
+        const originalColor = JSON.stringify(colors[i]);
+        const closestColor = findClosestColor(colors[i], quantizedColors);
+        colorMap.set(originalColor, closestColor);
     }
 
     // Map the original colors to the quantized colors
     const quantizedDataArray = new Uint8ClampedArray(imgDataArray.length);
     for (let i = 0; i < imgDataArray.length; i += 4) {
         const colorKey = JSON.stringify([imgDataArray[i], imgDataArray[i + 1], imgDataArray[i + 2]]);
-        const quantizedIndex = colorMap.get(colorKey);
-        const quantizedColor = quantizedColors[quantizedIndex] || [0, 0, 0]; // Default to black if no match
+        const quantizedColor = colorMap.get(colorKey) || [0, 0, 0]; // Default to black if no match
         quantizedDataArray[i] = quantizedColor[0];
         quantizedDataArray[i + 1] = quantizedColor[1];
         quantizedDataArray[i + 2] = quantizedColor[2];
@@ -46,10 +47,35 @@ self.onmessage = function(event) {
 
 function medianCut(colors, numColors) {
     // Implement Median Cut Algorithm here
-    return []; // Return array of quantized colors
+    // This is a placeholder implementation
+    return colors.slice(0, numColors); // Return array of quantized colors
 }
 
 function octree(colors, numColors) {
     // Implement Octree Algorithm here
-    return []; // Return array of quantized colors
+    // This is a placeholder implementation
+    return colors.slice(0, numColors); // Return array of quantized colors
+}
+
+function findClosestColor(color, palette) {
+    let closestColor = palette[0];
+    let minDistance = colorDistance(color, closestColor);
+
+    for (let i = 1; i < palette.length; i++) {
+        const distance = colorDistance(color, palette[i]);
+        if (distance < minDistance) {
+            minDistance = distance;
+            closestColor = palette[i];
+        }
+    }
+
+    return closestColor;
+}
+
+function colorDistance(color1, color2) {
+    return Math.sqrt(
+        Math.pow(color1[0] - color2[0], 2) +
+        Math.pow(color1[1] - color2[1], 2) +
+        Math.pow(color1[2] - color2[2], 2)
+    );
 }

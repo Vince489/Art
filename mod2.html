@@ -61,9 +61,9 @@
         <label for="quantizationInput">Quantization Level: </label>
         <select id="quantizationInput">
             <option value="low">Low (2-10)</option>
-            <option value="medium">Medium (11-20)</option>
-            <option value="medium-high">Medium High (21-36)</option>
-            <option value="high">High (37-48)</option>
+            <option value="medium">Medium (12-20)</option>
+            <option value="medium-high">Medium High (22-36)</option>
+            <option value="high">High (38-48)</option>
         </select>
         <span id="quantizationValue">Low (2-10)</span>
     </div>
@@ -105,22 +105,22 @@
             };
             document.getElementById('quantizationValue').textContent = quantizationText[quantizationValue];
         }
-
         async function generateThumbnails() {
             if (currentImage) {
                 const quantizationLevel = document.getElementById('quantizationInput').value;
                 const quantizationRanges = {
                     'low': [2, 10],
-                    'medium': [11, 20],
-                    'medium-high': [21, 36],
-                    'high': [37, 48]
+                    'medium': [12, 20],
+                    'medium-high': [22, 36],
+                    'high': [38, 48]
                 };
                 const [min, max] = quantizationRanges[quantizationLevel];
 
                 const thumbnailsContainer = document.getElementById('thumbnailsContainer');
                 thumbnailsContainer.innerHTML = ''; // Clear previous thumbnails
 
-                for (let k = min; k <= max; k++) {
+                // Loop in increments of 2
+                for (let k = min; k <= max; k += 2) {
                     const thumbnailCanvas = await processImage(currentImage, k);
                     const thumbnailDiv = document.createElement('div');
                     thumbnailDiv.className = 'thumbnail';
@@ -140,6 +140,7 @@
                 }
             }
         }
+
 
         function processImage(img, k) {
     return new Promise((resolve) => {
