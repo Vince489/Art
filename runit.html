@@ -68,20 +68,20 @@
     <script>
         let currentImage = null;
         let referenceImage = null;
-
+    
         document.getElementById('upload').addEventListener('change', handleImageUpload);
         document.getElementById('referenceUpload').addEventListener('change', handleReferenceImageUpload);
         document.getElementById('quantizationInput').addEventListener('input', updateQuantizationValue);
         document.getElementById('generateButton').addEventListener('click', generateImage);
         document.getElementById('downloadButton').addEventListener('click', downloadImage);
-
+    
         function handleImageUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
-
+    
             const img = new Image();
             const reader = new FileReader();
-
+    
             reader.onload = function(e) {
                 img.src = e.target.result;
                 img.onload = () => {
@@ -89,17 +89,17 @@
                     drawImageToCanvas(img, 'originalCanvas');
                 }
             };
-
+    
             reader.readAsDataURL(file);
         }
-
+    
         function handleReferenceImageUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
-
+    
             const img = new Image();
             const reader = new FileReader();
-
+    
             reader.onload = function(e) {
                 img.src = e.target.result;
                 img.onload = () => {
@@ -107,10 +107,10 @@
                     drawImageToCanvas(img, 'referenceCanvas');
                 }
             };
-
+    
             reader.readAsDataURL(file);
         }
-
+    
         function drawImageToCanvas(image, canvasId) {
             const canvas = document.getElementById(canvasId);
             const ctx = canvas.getContext('2d');
@@ -118,160 +118,53 @@
             canvas.height = image.height;
             ctx.drawImage(image, 0, 0);
         }
-
+    
         function updateQuantizationValue() {
             const quantizationValue = document.getElementById('quantizationInput').value;
             document.getElementById('quantizationValue').textContent = quantizationValue;
         }
-
+    
         function generateImage() {
             if (currentImage && referenceImage) {
                 const quantizationLevel = document.getElementById('quantizationInput').value;
-                processImage(currentImage, quantizationLevel, referenceImage);
+                const originalCanvas = document.getElementById('originalCanvas');
+                const simplifiedCanvas = document.getElementById('simplifiedCanvas');
+                const originalCtx = originalCanvas.getContext('2d', { willReadFrequently: true });
+    
+                const width = currentImage.width;
+                const height = currentImage.height;
+    
+                const imageData = originalCtx.getImageData(0, 0, width, height);
+    
+                const refCtx = document.createElement('canvas').getContext('2d');
+                refCtx.canvas.width = referenceImage.width;
+                refCtx.canvas.height = referenceImage.height;
+                refCtx.drawImage(referenceImage, 0, 0);
+                const refImageData = refCtx.getImageData(0, 0, referenceImage.width, referenceImage.height);
+                const refPixels = [];
+                for (let i = 0; i < refImageData.data.length; i += 4) {
+                    refPixels.push([refImageData.data[i], refImageData.data[i + 1], refImageData.data[i + 2]]);
+                }
+    
+                const worker = new Worker('worker2.js');
+                worker.postMessage({ imageData, k: quantizationLevel, refPixels });
+    
+                worker.onmessage = function(event) {
+                    const { quantizedData } = event.data;
+                    const quantizedImageData = new ImageData(quantizedData, width, height);
+    
+                    simplifiedCanvas.width = width;
+                    simplifiedCanvas.height = height;
+                    const simplifiedCtx = simplifiedCanvas.getContext('2d');
+                    simplifiedCtx.putImageData(quantizedImageData, 0, 0);
+    
+                    worker.terminate();
+                };
             } else {
                 alert("Please upload both the main image and the reference image.");
             }
         }
-
-        function processImage(img, k, refImg) {
-            const originalCanvas = document.getElementById('originalCanvas');
-            const simplifiedCanvas = document.getElementById('simplifiedCanvas');
-            const originalCtx = originalCanvas.getContext('2d', { willReadFrequently: true });
-            const simplifiedCtx = simplifiedCanvas.getContext('2d');
-
-            // Disable image smoothing to retain pixel art quality
-            originalCtx.imageSmoothingEnabled = false;
-            simplifiedCtx.imageSmoothingEnabled = false;
-
-            const width = img.width;
-            const height = img.height;
-
-            originalCanvas.width = width;
-            originalCanvas.height = height;
-            originalCtx.drawImage(img, 0, 0);
-
-            // Get pixel data from the original image
-            const imageData = originalCtx.getImageData(0, 0, width, height);
-            const pixels = [];
-            for (let i = 0; i < imageData.data.length; i += 4) {
-                pixels.push([imageData.data[i], imageData.data[i + 1], imageData.data[i + 2]]);
-            }
-
-            // Quantize the reference image
-            const refCtx = document.createElement('canvas').getContext('2d');
-            refCtx.canvas.width = refImg.width;
-            refCtx.canvas.height = refImg.height;
-            refCtx.drawImage(refImg, 0, 0);
-            const refImageData = refCtx.getImageData(0, 0, refImg.width, refImg.height);
-            const refPixels = [];
-            for (let i = 0; i < refImageData.data.length; i += 4) {
-                refPixels.push([refImageData.data[i], refImageData.data[i + 1], refImageData.data[i + 2]]);
-            }
-
-            const refPalette = kMeansQuantize(refPixels, k);
-
-            // Map colors from original image to reference palette
-            const mappedPixels = pixels.map(pixel => {
-                let minDistance = Infinity;
-                let closestColor = refPalette[0];
-                for (const refColor of refPalette) {
-                    const distance = getDistance(pixel, refColor);
-                    if (distance < minDistance) {
-                        minDistance = distance;
-                        closestColor = refColor;
-                    }
-                }
-                return closestColor;
-            });
-
-            // Adjust colors for shades based on luminance
-            const quantizedData = new Uint8ClampedArray(imageData.data.length);
-            for (let i = 0; i < mappedPixels.length; i++) {
-                const [r, g, b] = mappedPixels[i];
-                quantizedData[i * 4] = r;
-                quantizedData[i * 4 + 1] = g;
-                quantizedData[i * 4 + 2] = b;
-                quantizedData[i * 4 + 3] = 255; // Alpha channel
-            }
-
-            const quantizedImageData = new ImageData(quantizedData, width, height);
-            simplifiedCanvas.width = width;
-            simplifiedCanvas.height = height;
-            simplifiedCtx.putImageData(quantizedImageData, 0, 0);
-        }
-
-        function kMeansQuantize(pixels, k) {
-            // Initialize k random centroids
-            let centroids = [];
-            for (let i = 0; i < k; i++) {
-                centroids.push(pixels[Math.floor(Math.random() * pixels.length)]);
-            }
-
-            let clusters = Array.from({ length: k }, () => []);
-            let oldCentroids = [];
-            let maxIterations = 10;
-            let iteration = 0;
-
-            while (!areCentroidsEqual(centroids, oldCentroids) && iteration < maxIterations) {
-                // Assign pixels to the nearest centroid
-                clusters = Array.from({ length: k }, () => []);
-                for (const pixel of pixels) {
-                    let minDistance = Infinity;
-                    let clusterIndex = 0;
-                    for (let i = 0; i < centroids.length; i++) {
-                        const distance = getDistance(pixel, centroids[i]);
-                        if (distance < minDistance) {
-                            minDistance = distance;
-                            clusterIndex = i;
-                        }
-                    }
-                    clusters[clusterIndex].push(pixel);
-                }
-
-                // Update centroids
-                oldCentroids = centroids.map(centroid => [...centroid]);
-                centroids = clusters.map(cluster => {
-                    if (cluster.length === 0) return [0, 0, 0];
-                    const sum = cluster.reduce((acc, pixel) => [acc[0] + pixel[0], acc[1] + pixel[1], acc[2] + pixel[2]], [0, 0, 0]);
-                    return [Math.floor(sum[0] / cluster.length), Math.floor(sum[1] / cluster.length), Math.floor(sum[2] / cluster.length)];
-                });
-
-                iteration++;
-            }
-
-            // Assign each pixel to the color of its nearest centroid
-            return pixels.map(pixel => {
-                let minDistance = Infinity;
-                let nearestCentroid = centroids[0];
-                for (const centroid of centroids) {
-                    const distance = getDistance(pixel, centroid);
-                    if (distance < minDistance) {
-                        minDistance = distance;
-                        nearestCentroid = centroid;
-                    }
-                }
-                return nearestCentroid;
-            });
-        }
-
-        function areCentroidsEqual(centroids1, centroids2) {
-            if (centroids1.length !== centroids2.length) return false;
-            for (let i = 0; i < centroids1.length; i++) {
-                if (!centroids1[i].every((value, index) => value === centroids2[i][index])) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        function getDistance(color1, color2) {
-            return Math.sqrt(
-                Math.pow(color1[0] - color2[0], 2) +
-                Math.pow(color1[1] - color2[1], 2) +
-                Math.pow(color1[2] - color2[2], 2)
-            );
-        }
-
+    
         function downloadImage() {
             const simplifiedCanvas = document.getElementById('simplifiedCanvas');
             const link = document.createElement('a');
@@ -280,5 +173,6 @@
             link.click();
         }
     </script>
+    
 </body>
 </html>

@@ -1,7 +1,8 @@
 self.onmessage = function(e) {
-    const { pixels, k } = e.data;
+    const { pixels, width, height, k } = e.data;
     const quantizedPixels = kMeansQuantize(pixels, k);
-    self.postMessage(quantizedPixels);
+    const ditheredPixels = applyDithering(quantizedPixels, width, height);
+    self.postMessage(ditheredPixels);
 };
 
 function kMeansQuantize(pixels, k) {
@@ -70,4 +71,41 @@ function areCentroidsEqual(centroids1, centroids2) {
         }
     }
     return true;
+}
+
+function applyDithering(pixels, width, height) {
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            const idx = (y * width + x) * 4;
+            const oldPixel = [pixels[idx], pixels[idx + 1], pixels[idx + 2]];
+            const newPixel = nearestColor(oldPixel);
+            pixels[idx] = newPixel[0];
+            pixels[idx + 1] = newPixel[1];
+            pixels[idx + 2] = newPixel[2];
+
+            const quantError = [
+                oldPixel[0] - newPixel[0],
+                oldPixel[1] - newPixel[1],
+                oldPixel[2] - newPixel[2]
+            ];
+
+            distributeError(pixels, quantError, x + 1, y, width, height, 7 / 16);
+            distributeError(pixels, quantError, x - 1, y + 1, width, height, 3 / 16);
+            distributeError(pixels, quantError, x, y + 1, width, height, 5 / 16);
+            distributeError(pixels, quantError, x + 1, y + 1, width, height, 1 / 16);
+        }
+    }
+    return pixels;
+}
+
+function nearestColor(pixel) {
+    // Implement logic to find the nearest color from the palette (centroids)
+}
+
+function distributeError(pixels, quantError, x, y, width, height, factor) {
+    if (x < 0 || x >= width || y < 0 || y >= height) return;
+    const idx = (y * width + x) * 4;
+    pixels[idx] += quantError[0] * factor;
+    pixels[idx + 1] += quantError[1] * factor;
+    pixels[idx + 2] += quantError[2] * factor;
 }

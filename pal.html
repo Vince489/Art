@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Palette Reduction to 256 Colors</title>
+</head>
+<body>
+    <input type="file" id="imageInput" accept="image/*" />
+    <canvas id="canvas" style="display:none;"></canvas>
+    <canvas id="outputCanvas"></canvas>
+    <div id="palette"></div>
+    <div id="status">Ready</div>
+
+    <script>
+        const imageInput = document.getElementById('imageInput');
+        const canvas = document.getElementById('canvas');
+        const outputCanvas = document.getElementById('outputCanvas');
+        const ctx = canvas.getContext('2d');
+        const outputCtx = outputCanvas.getContext('2d');
+        const paletteDiv = document.getElementById('palette');
+        const statusDiv = document.getElementById('status');
+
+        imageInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            const img = new Image();
+            img.src = URL.createObjectURL(file);
+
+            img.onload = function () {
+                canvas.width = img.width;
+                canvas.height = img.height;
+                outputCanvas.width = img.width;
+                outputCanvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const pixels = imageData.data;
+                const colors = [];
+
+                for (let i = 0; i < pixels.length; i += 4) {
+                    const color = [pixels[i], pixels[i + 1], pixels[i + 2]];
+                    colors.push(color);
+                }
+
+                const uniqueColors = [...new Set(colors.map(JSON.stringify))].map(JSON.parse);
+
+                if (uniqueColors.length > 256) {
+                    const reducedPalette = quantize(uniqueColors, 256);
+                    displayPalette(reducedPalette);
+                    remapImage(reducedPalette, pixels);
+                } else {
+                    displayPalette(uniqueColors);
+                    remapImage(uniqueColors, pixels);
+                }
+            };
+        });
+
+        function quantize(colors, numColors) {
+            const buckets = [{ colors: colors }];
+            
+            while (buckets.length < numColors) {
+                let longestBucketIndex = 0;
+
+                for (let i = 1; i < buckets.length; i++) {
+                    if (buckets[i].colors.length > buckets[longestBucketIndex].colors.length) {
+                        longestBucketIndex = i;
+                    }
+                }
+
+                const bucket = buckets[longestBucketIndex];
+                const longestChannel = getLongestChannel(bucket.colors);
+                bucket.colors.sort((a, b) => a[longestChannel] - b[longestChannel]);
+
+                const median = Math.floor(bucket.colors.length / 2);
+                const bucketA = { colors: bucket.colors.slice(0, median) };
+                const bucketB = { colors: bucket.colors.slice(median) };
+
+                buckets.splice(longestBucketIndex, 1, bucketA, bucketB);
+
+                updateStatus(`Reducing... Buckets: ${buckets.length}/${numColors}`);
+            }
+
+            return buckets.map(bucket => averageColor(bucket.colors));
+        }
+
+        function getLongestChannel(colors) {
+            let rRange = 0, gRange = 0, bRange = 0;
+
+            for (const color of colors) {
+                rRange = Math.max(rRange, color[0]);
+                gRange = Math.max(gRange, color[1]);
+                bRange = Math.max(bRange, color[2]);
+            }
+
+            return rRange > gRange && rRange > bRange ? 0 : gRange > bRange ? 1 : 2;
+        }
+
+        function averageColor(colors) {
+            const total = colors.length;
+            const [rSum, gSum, bSum] = colors.reduce(
+                ([rAcc, gAcc, bAcc], [r, g, b]) => [rAcc + r, gAcc + g, bAcc + b],
+                [0, 0, 0]
+            );
+
+            return [Math.round(rSum / total), Math.round(gSum / total), Math.round(bSum / total)];
+        }
+
+        function displayPalette(colors) {
+            paletteDiv.innerHTML = '';
+            colors.forEach(color => {
+                const [r, g, b] = color;
+                const rgba = `rgb(${r},${g},${b})`;
+                const colorBox = document.createElement('div');
+                colorBox.style.width = '20px';
+                colorBox.style.height = '20px';
+                colorBox.style.backgroundColor = rgba;
+                colorBox.style.display = 'inline-block';
+                colorBox.title = rgba;
+                paletteDiv.appendChild(colorBox);
+            });
+        }
+
+        function remapImage(palette, pixels) {
+            const newImageData = outputCtx.createImageData(canvas.width, canvas.height);
+            const newPixels = newImageData.data;
+
+            for (let i = 0; i < pixels.length; i += 4) {
+                const originalColor = [pixels[i], pixels[i + 1], pixels[i + 2]];
+                const closestColor = findClosestColor(originalColor, palette);
+
+                newPixels[i] = closestColor[0];
+                newPixels[i + 1] = closestColor[1];
+                newPixels[i + 2] = closestColor[2];
+                newPixels[i + 3] = 255; // Fully opaque
+            }
+
+            outputCtx.putImageData(newImageData, 0, 0);
+            updateStatus("Reduction complete.");
+        }
+
+        function findClosestColor(color, palette) {
+            let closestColor = null;
+            let minDistance = Infinity;
+
+            const [r1, g1, b1] = color;
+
+            palette.forEach(paletteColor => {
+                const [r2, g2, b2] = paletteColor;
+
+                const distance = Math.sqrt(
+                    Math.pow(r2 - r1, 2) +
+                    Math.pow(g2 - g1, 2) +
+                    Math.pow(b2 - b1, 2)
+                );
+
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closestColor = paletteColor;
+                }
+            });
+
+            return closestColor;
+        }
+
+        function updateStatus(message) {
+            statusDiv.textContent = message;
+        }
+    </script>
+</body>
+</html>
