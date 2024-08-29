@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Resizer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+        }
+        canvas {
+            border: 1px solid #000;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Image Resizer</h1>
+    <input type="file" id="imageUpload" accept="image/*">
+    <br>
+    <button id="resizeButton">Resize to 128x196</button>
+    <br>
+    <canvas id="outputCanvas"></canvas>
+
+    <script>
+// Select DOM elements
+const imageUpload = document.getElementById('imageUpload');
+const resizeButton = document.getElementById('resizeButton');
+const outputCanvas = document.getElementById('outputCanvas');
+const ctx = outputCanvas.getContext('2d');
+
+let image = new Image();
+
+// Handle image upload
+imageUpload.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function (event) {
+            image.src = event.target.result;
+        }
+        reader.readAsDataURL(file);
+    }
+});
+
+// Resize image using nearest neighbor interpolation
+resizeButton.addEventListener('click', () => {
+    if (image.src) {
+        // Set the canvas size to the target resolution
+        outputCanvas.width = 128;
+        outputCanvas.height = 196;
+
+        // Resize the image using nearest neighbor interpolation
+        ctx.imageSmoothingEnabled = false;  // Ensure nearest neighbor
+        ctx.clearRect(0, 0, outputCanvas.width, outputCanvas.height); // Clear canvas before drawing
+        ctx.drawImage(image, 0, 0, 128, 196); // Draw resized image
+    } else {
+        alert("Please upload an image first.");
+    }
+});
+
+
+</script>
+</body>
+</html>

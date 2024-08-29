@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Broken Glitch</title>
+</head>
+<body>
+    <input type="file" id="upload" accept="image/*">
+    <canvas id="canvas"></canvas>
+    <script>
+        const upload = document.getElementById('upload');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        upload.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+
+            reader.onload = (e) => {
+                const img = new Image();
+                img.src = e.target.result;
+
+                img.onload = () => {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const sobelData = applyFilter(imageData, sobelKernelX);
+                    ctx.putImageData(sobelData, 0, 0);
+                };
+            };
+
+            reader.readAsDataURL(file);
+        });
+
+        function applyFilter(imageData, kernel) {
+            const width = imageData.width;
+            const height = imageData.height;
+            const outputData = new ImageData(width, height);
+            const pixels = imageData.data;
+
+            function getPixel(x, y, channel) {
+                if (x < 0 || x >= width || y < 0 || y >= height) return 0;
+                return pixels[(y * width + x) * 4 + channel];
+            }
+
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    let r = 0, g = 0, b = 0;
+                    for (let ky = -1; ky <= 1; ky++) {
+                        for (let kx = -1; kx <= 1; kx++) {
+                            const pixelR = getPixel(x + kx, y + ky, 0);
+                            const pixelG = getPixel(x + kx, y + ky, 1);
+                            const pixelB = getPixel(x + kx, y + ky, 2);
+                            const weight = kernel[ky + 1][kx + 1];
+
+                            r += pixelR * weight;
+                            g += pixelG * weight;
+                            b += pixelB * weight;
+                        }
+                    }
+                    const index = (y * width + x) * 4;
+                    outputData.data[index] = r;
+                    outputData.data[index + 1] = g;
+                    outputData.data[index + 2] = b;
+                    outputData.data[index + 3] = 255;
+                }
+            }
+
+            return outputData;
+        }
+
+        const sobelKernelX = [
+            [-1, 0, 1],
+            [-2, 0, 2],
+            [-1, 0, 1]
+        ];
+
+        const sobelKernelY = [
+            [-1, -2, -1],
+            [ 0,  0,  0],
+            [ 1,  2,  1]
+        ];
+    </script>
+</body>
+</html>

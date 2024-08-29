@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Load BIN and Display Image</title>
+</head>
+<body>
+    <h1>Load BIN and Display Image</h1>
+    <input type="file" id="load" accept=".bin">
+    <canvas id="canvas"></canvas>
+
+    <script>
+        let canvas = document.getElementById('canvas');
+        let ctx = canvas.getContext('2d');
+
+        document.getElementById('load').addEventListener('change', function(event) {
+            let file = event.target.files[0];
+            let reader = new FileReader();
+            reader.onload = function(e) {
+                let arrayBuffer = e.target.result;
+                let header = new Uint32Array(arrayBuffer, 0, 2);
+                let width = header[0];
+                let height = header[1];
+                let data = new Uint8ClampedArray(arrayBuffer, 8);
+                processLoadedData(data, width, height);
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        function processLoadedData(data, width, height) {
+            canvas.width = width;
+            canvas.height = height;
+            let imageData = new ImageData(data, width, height);
+            ctx.putImageData(imageData, 0, 0);
+        }
+    </script>
+</body>
+</html>

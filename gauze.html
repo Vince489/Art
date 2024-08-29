@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gaussian + Sobel Edge Detection</title>
+</head>
+<body>
+    <input type="file" id="upload" accept="image/*">
+    <canvas id="canvas"></canvas>
+    <script>
+        const upload = document.getElementById('upload');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        upload.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+
+            reader.onload = (e) => {
+                const img = new Image();
+                img.src = e.target.result;
+
+                img.onload = () => {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+
+                    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                    const pixels = imageData.data;
+
+                    // Apply Gaussian blur
+                    const blurredData = gaussianBlur(imageData);
+
+                    // Apply Sobel filter to the blurred image
+                    const sobelData = sobelFilter(blurredData);
+                    const sobelImageData = new ImageData(sobelData, canvas.width, canvas.height);
+
+                    ctx.putImageData(sobelImageData, 0, 0);
+                };
+            };
+
+            reader.readAsDataURL(file);
+        });
+
+        function gaussianBlur(imageData) {
+            const width = imageData.width;
+            const height = imageData.height;
+            const pixels = imageData.data;
+            const blurredData = new Uint8ClampedArray(pixels.length);
+
+            const kernel = [
+                [1, 4, 6, 4, 1],
+                [4, 16, 24, 16, 4],
+                [6, 24, 36, 24, 6],
+                [4, 16, 24, 16, 4],
+                [1, 4, 6, 4, 1]
+            ];
+            const kernelSize = 5;
+            const kernelSum = 256;
+
+            function convolve(x, y, kernel) {
+                let r = 0, g = 0, b = 0;
+                for (let i = 0; i < kernelSize; i++) {
+                    for (let j = 0; j < kernelSize; j++) {
+                        const px = x + j - Math.floor(kernelSize / 2);
+                        const py = y + i - Math.floor(kernelSize / 2);
+                        if (px >= 0 && px < width && py >= 0 && py < height) {
+                            const index = (py * width + px) * 4;
+                            r += pixels[index] * kernel[i][j];
+                            g += pixels[index + 1] * kernel[i][j];
+                            b += pixels[index + 2] * kernel[i][j];
+                        }
+                    }
+                }
+                return [r / kernelSum, g / kernelSum, b / kernelSum];
+            }
+
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const [r, g, b] = convolve(x, y, kernel);
+                    const index = (y * width + x) * 4;
+                    blurredData[index] = r;
+                    blurredData[index + 1] = g;
+                    blurredData[index + 2] = b;
+                    blurredData[index + 3] = 255;
+                }
+            }
+
+            return new ImageData(blurredData, width, height);
+        }
+
+        function sobelFilter(imageData) {
+            const width = imageData.width;
+            const height = imageData.height;
+            const pixels = imageData.data;
+            const gray = new Uint8ClampedArray(width * height);
+
+            for (let i = 0; i < pixels.length; i += 4) {
+                const r = pixels[i];
+                const g = pixels[i + 1];
+                const b = pixels[i + 2];
+                gray[i / 4] = 0.299 * r + 0.587 * g + 0.114 * b;
+            }
+
+            const sobelData = new Uint8ClampedArray(width * height * 4);
+
+            const sobelX = [
+                [-1, 0, 1],
+                [-2, 0, 2],
+                [-1, 0, 1]
+            ];
+
+            const sobelY = [
+                [-1, -2, -1],
+                [0, 0, 0],
+                [1, 2, 1]
+            ];
+
+            function convolve(x, y, kernel) {
+                let sum = 0;
+                for (let i = -1; i <= 1; i++) {
+                    for (let j = -1; j <= 1; j++) {
+                        const px = x + j;
+                        const py = y + i;
+                        if (px >= 0 && px < width && py >= 0 && py < height) {
+                            sum += gray[py * width + px] * kernel[i + 1][j + 1];
+                        }
+                    }
+                }
+                return sum;
+            }
+
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const gx = convolve(x, y, sobelX);
+                    const gy = convolve(x, y, sobelY);
+                    const magnitude = Math.sqrt(gx * gx + gy * gy);
+                    const index = (y * width + x) * 4;
+                    sobelData[index] = sobelData[index + 1] = sobelData[index + 2] = magnitude;
+                    sobelData[index + 3] = 255;
+                }
+            }
+
+            return sobelData;
+        }
+    </script>
+</body>
+</html>
